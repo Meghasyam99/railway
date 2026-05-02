@@ -21,12 +21,14 @@ from datetime import datetime, timezone
 from typing import Any, Optional
 import httpx
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from pydantic import BaseModel
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("vera_bot")
 
 app = FastAPI(title="Vera Bot", version="1.0.0")
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=["*"])
 START_TIME = time.time()
 
 # ─────────────────────────────────────────────
