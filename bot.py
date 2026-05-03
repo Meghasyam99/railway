@@ -26,30 +26,51 @@ sent_suppression_keys: set[str] = set()
 conv_meta: dict[str, dict] = {}
 auto_reply_counts: dict[str, int] = {}
 
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
-MODEL = "claude-sonnet-4-20250514"
+GROQ_MODEL = "llama-3.3-70b-versatile"
 
-# ── Claude helper ───────────────────────────────────────────────────────────────
+# ── LLM helper — Groq first, Anthropic fallback ────────────────────────────────
 async def call_claude(system: str, user: str, max_tokens: int = 600) -> str:
-    if not ANTHROPIC_API_KEY:
-        raise RuntimeError("ANTHROPIC_API_KEY not set")
-    async with httpx.AsyncClient(timeout=28) as client:
-        resp = await client.post(
-            "https://api.anthropic.com/v1/messages",
-            headers={
-                "x-api-key": ANTHROPIC_API_KEY,
-                "anthropic-version": "2023-06-01",
-                "content-type": "application/json",
-            },
-            json={
-                "model": MODEL,
-                "max_tokens": max_tokens,
-                "system": system,
-                "messages": [{"role": "user", "content": user}],
-            },
-        )
-        resp.raise_for_status()
-        return resp.json()["content"][0]["text"].strip()
+    if GROQ_API_KEY:
+        async with httpx.AsyncClient(timeout=28) as client:
+            resp = await client.post(
+                "https://api.groq.com/openai/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {GROQ_API_KEY}",
+                    "content-type": "application/json",
+                },
+                json={
+                    "model": GROQ_MODEL,
+                    "max_tokens": max_tokens,
+                    "messages": [
+                        {"role": "system", "content": system},
+                        {"role": "user", "content": user},
+                    ],
+                },
+            )
+            resp.raise_for_status()
+            return resp.json()["choices"][0]["message"]["content"].strip()
+    elif ANTHROPIC_API_KEY:
+        async with httpx.AsyncClient(timeout=28) as client:
+            resp = await client.post(
+                "https://api.anthropic.com/v1/messages",
+                headers={
+                    "x-api-key": ANTHROPIC_API_KEY,
+                    "anthropic-version": "2023-06-01",
+                    "content-type": "application/json",
+                },
+                json={
+                    "model": "claude-sonnet-4-20250514",
+                    "max_tokens": max_tokens,
+                    "system": system,
+                    "messages": [{"role": "user", "content": user}],
+                },
+            )
+            resp.raise_for_status()
+            return resp.json()["content"][0]["text"].strip()
+    else:
+        raise RuntimeError("No LLM key — set GROQ_API_KEY or ANTHROPIC_API_KEY")
 
 # ── Context helpers ─────────────────────────────────────────────────────────────
 def get_ctx(scope: str, cid: str) -> Optional[dict]:
